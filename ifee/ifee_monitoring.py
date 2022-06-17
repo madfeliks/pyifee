@@ -39,14 +39,16 @@ class CAircraftCollector():
 
 
 async def collect_aircraft(p_file_path: str = '/var/lib/prom/aircraft.prom') -> None:
-    while True:
-        try:
+    try:
+        while True:
             registry = CollectorRegistry()
             registry.register(CAircraftCollector())
             write_to_textfile(p_file_path, registry)
             await asyncio.sleep(10)
-        except PermissionError as err:
-            raise RuntimeError(f"[prom] {str(err)}")
+    except PermissionError as err:
+        raise RuntimeError(f"[collect] {str(err)}") from err
+    except(asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+        pass
 
 
 class CMetricCollector():
@@ -78,11 +80,13 @@ class CMetricCollector():
 
 
 async def collect_metrics(p_file_path: str = '/var/lib/prom/kontron.prom') -> None:
-    while True:
-        try:
+    try:
+        while True:
             registry = CollectorRegistry()
             registry.register(CMetricCollector())
             write_to_textfile(p_file_path, registry)
             await asyncio.sleep(10)
-        except PermissionError as err:
-            raise RuntimeError(f"[prom] {str(err)}")
+    except PermissionError as err:
+        raise RuntimeError(f"[collect] {str(err)}") from err
+    except(asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+        pass

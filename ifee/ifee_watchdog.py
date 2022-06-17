@@ -45,48 +45,51 @@ async def watch_dog(p_modem: int, p_lte: str, p_vpn: str, p_lte_host: str, p_vpn
     wait_delay = 5
     loop_delay = 1
 
-    while True:
-        lte = n_manager.get(p_lte)
-        vpn = n_manager.get(p_vpn)
-        modems = m_manager.modems
+    try:
+        while True:
+            lte = n_manager.get(p_lte)
+            vpn = n_manager.get(p_vpn)
+            modems = m_manager.modems
 
-        if not lte:
-            raise RuntimeError("[watchdog] lte connection does not exist")
-        if not vpn:
-            raise RuntimeError("[watchdog] vpn connection does not exist")
+            if not lte:
+                raise RuntimeError("[watchdog] lte connection does not exist")
+            if not vpn:
+                raise RuntimeError("[watchdog] vpn connection does not exist")
 
-        if len(modems) == 0:
-            logger.error("no one modems have not been found")
-            await asyncio.sleep(wait_delay)
-            continue
-
-        modem = next((m for m in modems if m.index == p_modem), modems[0])
-        modem.connection = p_lte
-
-        check = (status.adsb.active, status.control.modem)
-        msg = f"state -- ADS-B: {check[0]}, control: {check[1]}"
-        logger.debug(msg)
-
-        match check:
-            case (True, True):
-                modem.enable()
-
-                activate = await activate_conn(lte, p_lte_host, wait_delay)
-                if not activate:
-                    modem.disable()
-                    continue
-
-                activate = await activate_conn(vpn, p_vpn_host, wait_delay)
-                if not activate:
-                    modem.disable()
-                    continue
-            case _:
-                vpn.connect = False
+            if len(modems) == 0:
+                logger.error("no one modems have not been found")
                 await asyncio.sleep(wait_delay)
+                continue
 
-                lte.connect = False
-                await asyncio.sleep(wait_delay)
+            modem = next((m for m in modems if m.index == p_modem), modems[0])
+            modem.connection = p_lte
 
-                modem.disable()
+            check = (status.adsb.active, status.control.modem)
+            msg = f"state -- ADS-B: {check[0]}, control: {check[1]}"
+            logger.debug(msg)
 
-        await asyncio.sleep(loop_delay)
+            match check:
+                case (True, True):
+                    modem.enable()
+
+                    activate = await activate_conn(lte, p_lte_host, wait_delay)
+                    if not activate:
+                        modem.disable()
+                        continue
+
+                    activate = await activate_conn(vpn, p_vpn_host, wait_delay)
+                    if not activate:
+                        modem.disable()
+                        continue
+                case _:
+                    vpn.connect = False
+                    await asyncio.sleep(wait_delay)
+
+                    lte.connect = False
+                    await asyncio.sleep(wait_delay)
+
+                    modem.disable()
+
+            await asyncio.sleep(loop_delay)
+    except(asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+        logger.info("stopped")

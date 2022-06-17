@@ -61,59 +61,62 @@ async def parse_adsb() -> None:
     if not status.adsb.icao:
         return None
 
-    while True:
-        if status.adsb.msg.qsize() == 0:
+    try:
+        while True:
+            if status.adsb.msg.qsize() == 0:
+                await asyncio.sleep(1)
+                continue
+
+            msg = status.adsb.msg.get_nowait()
+            logger.debug("parse new ads-b message: %s", msg.msg)
+
+            velocity = 0
+            altitude = 0
+            position = None
+            typecode = None
+
+            time_stamp = msg.time
+            message = msg.msg
+
+            icao = pms.adsb.icao(message)
+            typecode = pms.adsb.typecode(message)
+
+            if icao != status.adsb.icao:
+                await asyncio.sleep(1)
+                continue
+
+            if typecode == 19 or (4 < typecode < 9):
+                velocity = pms.adsb.velocity(message)[0]
+                status.monitoring.vel = velocity
+                logger.info("ts: %i -- msg: %s -- icao: %s -- vel: %i", time_stamp, message, icao, velocity)
+
+                match (bool(velocity >= 160), status.adsb.active):
+                    case (True, True):
+                        status.adsb.active = False
+                        logger.info("speed >= 160kt -- set lte status to watchdog: disabled")
+                    case (False, False):
+                        status.adsb.active = True
+                        logger.info("speed < 160kt  -- set lte status to watchdog: enabled")
+                    case _:
+                        pass
+
+            elif (9 <= typecode <= 18) or (20 <= typecode <= 22):
+                if pms.adsb.oe_flag(message):
+                    msg1 = message
+                    time_stamp_1 = time_stamp
+                else:
+                    msg0 = message
+                    time_stamp_0 = time_stamp
+
+                if msg0 and msg1:
+                    position = pms.bds.bds05.airborne_position(msg0, msg1, time_stamp_0, time_stamp_1)
+                    altitude = pms.adsb.altitude(message)
+                    msg0 = None
+                    msg1 = None
+                    status.monitoring.pos = CPosition(position[0],position[1])
+                    status.monitoring.alt = altitude
+                    logger.info("ts: %i -- msg: %s -- icao: %s -- pos: %s -- alt: %i", time_stamp, message, icao, str(position), int(altitude))
+
             await asyncio.sleep(1)
-            continue
-
-        msg = status.adsb.msg.get_nowait()
-        logger.debug("parse new ads-b message: %s", msg.msg)
-
-        velocity = 0
-        altitude = 0
-        position = None
-        typecode = None
-
-        time_stamp = msg.time
-        message = msg.msg
-
-        icao = pms.adsb.icao(message)
-        typecode = pms.adsb.typecode(message)
-
-        if icao != status.adsb.icao:
-            await asyncio.sleep(1)
-            continue
-
-        if typecode == 19 or (4 < typecode < 9):
-            velocity = pms.adsb.velocity(message)[0]
-            status.monitoring.vel = velocity
-            logger.info("ts: %i -- msg: %s -- icao: %s -- vel: %i", time_stamp, message, icao, velocity)
-
-            match (bool(velocity >= 160), status.adsb.active):
-                case (True, True):
-                    status.adsb.active = False
-                    logger.info("speed >= 160kt -- set lte status to watchdog: disabled")
-                case (False, False):
-                    status.adsb.active = True
-                    logger.info("speed < 160kt  -- set lte status to watchdog: enabled")
-                case _:
-                    pass
-
-        elif (9 <= typecode <= 18) or (20 <= typecode <= 22):
-            if pms.adsb.oe_flag(message):
-                msg1 = message
-                time_stamp_1 = time_stamp
-            else:
-                msg0 = message
-                time_stamp_0 = time_stamp
-
-            if msg0 and msg1:
-                position = pms.bds.bds05.airborne_position(msg0, msg1, time_stamp_0, time_stamp_1)
-                altitude = pms.adsb.altitude(message)
-                msg0 = None
-                msg1 = None
-                status.monitoring.pos = CPosition(position[0],position[1])
-                status.monitoring.alt = altitude
-                logger.info("ts: %i -- msg: %s -- icao: %s -- pos: %s -- alt: %i", time_stamp, message, icao, str(position), int(altitude))
-
-        await asyncio.sleep(1)
+    except(asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+        logger.info("stopped")
