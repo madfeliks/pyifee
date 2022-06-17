@@ -1,5 +1,0 @@
-dbus-next
-pyModeS
-ping3
-requests
-prometheus_client
