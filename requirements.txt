@@ -1,4 +1,4 @@
-dbus-next
+dbus-python
 pyModeS
 ping3
 requests

@@ -18,6 +18,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=['ifee'],
-    install_requires=["dbus-next", "pyModeS", "ping3", "requests", "prometheus_client"],
+    install_requires=["dbus-python", "pyModeS", "ping3", "requests", "prometheus_client"],
     python_requires=">=3.10",
 )
